@@ -12,6 +12,13 @@ import {
   Menu,
   X,
 } from "lucide-react";
+import {
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from "@clerk/nextjs";
 
 export default function SentilyzeLanding() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -411,12 +418,21 @@ export default function SentilyzeLanding() {
             </div>
 
             <div className="hidden lg:flex items-center gap-3 xl:gap-4 flex-shrink-0">
-              <button className="text-sm font-medium hover:text-cyan-400 transition-colors whitespace-nowrap">
-                Login
-              </button>
-              <button className="bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-4 xl:px-6 py-2 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-cyan-500/50 transition-all whitespace-nowrap">
-                Get Started
-              </button>
+              <SignedOut>
+                <SignInButton mode="modal">
+                  <button className="text-sm font-medium hover:text-cyan-400 transition-colors whitespace-nowrap">
+                    Login
+                  </button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <button className="bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-4 xl:px-6 py-2 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-cyan-500/50 transition-all whitespace-nowrap">
+                    Get Started
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+              <SignedIn>
+                <UserButton />
+              </SignedIn>
             </div>
 
             <button
@@ -460,12 +476,21 @@ export default function SentilyzeLanding() {
                 Testimonials
               </a>
               <div className="pt-3 border-t border-white/10 space-y-2">
-                <button className="w-full text-sm font-medium text-left hover:text-cyan-400 transition-colors py-2">
-                  Login
-                </button>
-                <button className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-3 rounded-lg text-sm font-semibold">
-                  Get Started
-                </button>
+                <SignedOut>
+                  <SignInButton mode="modal">
+                    <button className="w-full text-sm font-medium text-left hover:text-cyan-400 transition-colors py-2">
+                      Login
+                    </button>
+                  </SignInButton>
+                  <SignUpButton mode="modal">
+                    <button className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-3 rounded-lg text-sm font-semibold">
+                      Get Started
+                    </button>
+                  </SignUpButton>
+                </SignedOut>
+                <SignedIn>
+                  <UserButton />
+                </SignedIn>
               </div>
             </div>
           </div>
