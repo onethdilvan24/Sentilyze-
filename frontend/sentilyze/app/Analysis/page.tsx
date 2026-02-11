@@ -33,6 +33,14 @@ export default function AnalysisPage() {
   const [selectedAssetType, setSelectedAssetType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [timeRange, setTimeRange] = useState("24h");
+  const [marketInput, setMarketInput] = useState("");
+
+  const handleAnalyze = () => {
+    if (marketInput.trim()) {
+      // TODO: Implement analysis logic
+      console.log("Analyzing market:", marketInput);
+    }
+  };
 
   const analyses = [
     {
@@ -157,6 +165,27 @@ export default function AnalysisPage() {
         </header>
 
         <div className="p-6 space-y-6">
+          {/* Market Input Section */}
+          <div className="bg-zinc-950/80 border border-white/10 rounded-xl p-5">
+            <h2 className="text-lg font-semibold mb-3">Enter Market to Analyze</h2>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={marketInput}
+                onChange={(e) => setMarketInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
+                placeholder="Enter market symbol (e.g., AAPL, BTC, EUR/USD)"
+                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+              />
+              <button
+                onClick={handleAnalyze}
+                className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all whitespace-nowrap"
+              >
+                Start Analyze
+              </button>
+            </div>
+          </div>
+
           {filteredAnalyses.map((analysis) => (
             <div
               key={analysis.id}

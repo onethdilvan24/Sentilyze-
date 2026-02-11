@@ -66,7 +66,7 @@ export default function Sidebar({
               "dashboard",
             )}
             {navItem("/Analysis", "Analysis", <Target />, "analysis")}
-            {navItem("/news", "News Feed", <Newspaper />, "news")}
+            {navItem("/news-feed", "News Feed", <Newspaper />, "news")}
             {navItem("/analytics", "Analytics", <BarChart3 />, "analytics")}
             {navItem("/watchlist", "Watchlist", <Activity />, "watchlist")}
             {navItem("/team", "Team", <Users />, "team")}
