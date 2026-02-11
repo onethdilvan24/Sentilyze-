@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   TrendingUp,
   Zap,
@@ -11,6 +12,7 @@ import {
   Check,
   Menu,
   X,
+  LayoutDashboard,
 } from "lucide-react";
 import {
   SignInButton,
@@ -419,18 +421,25 @@ export default function SentilyzeLanding() {
 
             <div className="hidden lg:flex items-center gap-3 xl:gap-4 flex-shrink-0">
               <SignedOut>
-                <SignInButton mode="modal">
+                <SignInButton mode="modal" forceRedirectUrl="/dashboard">
                   <button className="text-sm font-medium hover:text-cyan-400 transition-colors whitespace-nowrap">
                     Login
                   </button>
                 </SignInButton>
-                <SignUpButton mode="modal">
+                <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
                   <button className="bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-4 xl:px-6 py-2 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-cyan-500/50 transition-all whitespace-nowrap">
                     Get Started
                   </button>
                 </SignUpButton>
               </SignedOut>
               <SignedIn>
+                <Link
+                  href="/dashboard"
+                  className="bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-4 xl:px-6 py-2 rounded-lg text-sm font-semibold hover:shadow-lg hover:shadow-cyan-500/50 transition-all whitespace-nowrap flex items-center gap-2"
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  View Dashboard
+                </Link>
                 <UserButton />
               </SignedIn>
             </div>
@@ -477,19 +486,29 @@ export default function SentilyzeLanding() {
               </a>
               <div className="pt-3 border-t border-white/10 space-y-2">
                 <SignedOut>
-                  <SignInButton mode="modal">
+                  <SignInButton mode="modal" forceRedirectUrl="/dashboard">
                     <button className="w-full text-sm font-medium text-left hover:text-cyan-400 transition-colors py-2">
                       Login
                     </button>
                   </SignInButton>
-                  <SignUpButton mode="modal">
+                  <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
                     <button className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-3 rounded-lg text-sm font-semibold">
                       Get Started
                     </button>
                   </SignUpButton>
                 </SignedOut>
                 <SignedIn>
-                  <UserButton />
+                  <Link
+                    href="/dashboard"
+                    className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white px-6 py-3 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    View Dashboard
+                  </Link>
+                  <div className="flex items-center gap-3 py-2">
+                    <UserButton />
+                    <span className="text-sm text-gray-400">Account</span>
+                  </div>
                 </SignedIn>
               </div>
             </div>

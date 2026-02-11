@@ -6,10 +6,7 @@ import {
   LayoutDashboard,
   Target,
   Newspaper,
-  BarChart3,
   Activity,
-  Users,
-  Zap,
   Settings,
 } from "lucide-react";
 
@@ -67,9 +64,7 @@ export default function Sidebar({
             )}
             {navItem("/Analysis", "Analysis", <Target />, "analysis")}
             {navItem("/news-feed", "News Feed", <Newspaper />, "news")}
-            {navItem("/analytics", "Analytics", <BarChart3 />, "analytics")}
             {navItem("/watchlist", "Watchlist", <Activity />, "watchlist")}
-            {navItem("/team", "Team", <Users />, "team")}
             {navItem("/settings", "Settings", <Settings />, "settings")}
           </nav>
 
