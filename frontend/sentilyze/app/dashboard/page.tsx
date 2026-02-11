@@ -28,10 +28,22 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
+import { useUser, UserButton } from "@clerk/nextjs";
 
 export default function SentilyzeDashboard() {
+  const { user, isLoaded } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedTimeframe, setSelectedTimeframe] = useState("7d");
+
+  // Get user's display name and initials
+  const displayName = user?.firstName || user?.username || "User";
+  const initials = user?.firstName && user?.lastName
+    ? `${user.firstName[0]}${user.lastName[0]}`
+    : user?.firstName
+    ? user.firstName.substring(0, 2)
+    : user?.username
+    ? user.username.substring(0, 2).toUpperCase()
+    : "U";
 
   // Sample data
   const sentimentOverview = {
@@ -272,7 +284,9 @@ export default function SentilyzeDashboard() {
               </button>
 
               <div>
-                <h1 className="text-2xl font-bold">Welcome Back, Mahfuzul!</h1>
+                <h1 className="text-2xl font-bold">
+                  Welcome Back{isLoaded && user ? `, ${displayName}` : ""}!
+                </h1>
                 <p className="text-sm text-gray-400">
                   Here's what's happening with your signals today
                 </p>
@@ -298,9 +312,13 @@ export default function SentilyzeDashboard() {
                 <Settings className="w-5 h-5" />
               </button>
 
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-purple-600 flex items-center justify-center font-bold text-sm">
-                MH
-              </div>
+              <UserButton 
+                appearance={{
+                  elements: {
+                    avatarBox: "w-10 h-10"
+                  }
+                }}
+              />
             </div>
           </div>
         </header>
