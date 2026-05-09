@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -24,7 +25,7 @@ export default function Sidebar({
   const navItem = (
     href: string,
     label: string,
-    icon: JSX.Element,
+    icon: ReactNode,
     key: string,
   ) => (
     <Link

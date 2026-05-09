@@ -30,6 +30,9 @@ import {
 import Sidebar from "@/components/layout/Sidebar";
 import { useUser, UserButton } from "@clerk/nextjs";
 
+type DashSignal = "BUY" | "SELL" | "HOLD";
+type DashSentiment = "Bullish" | "Bearish" | "Neutral";
+
 export default function SentilyzeDashboard() {
   const { user, isLoaded } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -196,7 +199,7 @@ export default function SentilyzeDashboard() {
     },
   ];
 
-  const getSignalColor = (signal) => {
+  const getSignalColor = (signal: DashSignal | string) => {
     switch (signal) {
       case "BUY":
         return "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
@@ -209,7 +212,7 @@ export default function SentilyzeDashboard() {
     }
   };
 
-  const getSentimentColor = (sentiment) => {
+  const getSentimentColor = (sentiment: DashSentiment | string) => {
     switch (sentiment) {
       case "Bullish":
         return "text-emerald-400";
