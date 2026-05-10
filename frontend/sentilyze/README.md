@@ -20,6 +20,23 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Supabase + Clerk integration
+
+This project uses Supabase as the database and Clerk for auth, bridged via Clerk's
+**native Supabase third-party auth integration** (Clerk session JWT is forwarded to
+Supabase, and RLS policies match `auth.jwt()->>'sub'` against `clerk_user_id`).
+
+One-time setup (required for RLS to allow reads/writes):
+
+1. In the Supabase dashboard go to **Authentication → Sign In / Providers → Third Party Auth**.
+2. Enable **Clerk** and paste your Clerk Frontend API URL (e.g.
+   `https://mutual-aardvark-48.clerk.accounts.dev`).
+3. Save. No JWT template configuration is needed in Clerk for the native integration.
+
+Schema lives in [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
+and was applied via the Supabase MCP `apply_migration` tool. To re-apply manually,
+run that file in the Supabase SQL editor.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

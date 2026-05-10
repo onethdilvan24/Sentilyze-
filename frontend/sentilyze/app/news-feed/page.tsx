@@ -1,32 +1,38 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
-  Clock,
   ExternalLink,
   Filter,
   Search,
-  Bookmark,
-  Share2,
-  ThumbsUp,
-  ThumbsDown,
   Menu,
   X,
   Newspaper,
-  Twitter,
-  Globe,
-  MessageSquare,
   RefreshCw,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 
 type Sentiment = "Bullish" | "Bearish" | "Neutral";
-type Source = "News" | "Twitter" | "Reddit" | "Telegram";
+type Source = "Analysis" | "Watchlist";
+
+interface NewsRow {
+  id: string;
+  title: string;
+  source: string;
+  sentiment: string | null;
+  impact_score: number | null;
+  url: string;
+  published_at: string;
+  symbol: string;
+  origin: "analysis" | "cache";
+}
 
 interface NewsItem {
-  id: number;
+  id: string;
   title: string;
   summary: string;
   source: Source;
@@ -36,13 +42,42 @@ interface NewsItem {
   relatedAssets: string[];
   timestamp: string;
   url: string;
-  imageUrl?: string;
-  engagement: {
-    likes: number;
-    comments: number;
-    shares: number;
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return iso;
+  const diffSec = Math.max(1, Math.round((Date.now() - then) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const m = Math.round(diffSec / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return `${d}d ago`;
+}
+
+function mapRow(row: NewsRow): NewsItem {
+  const sentiment: Sentiment =
+    row.sentiment === "Positive"
+      ? "Bullish"
+      : row.sentiment === "Negative"
+        ? "Bearish"
+        : "Neutral";
+  const score = Math.max(1, Math.min(10, row.impact_score ?? 5)) * 10;
+  return {
+    id: row.id,
+    title: row.title,
+    summary: "",
+    source: row.origin === "analysis" ? "Analysis" : "Watchlist",
+    sourceName: row.source,
+    sentiment,
+    sentimentScore:
+      sentiment === "Bullish" ? 60 + Math.round(score / 5) : sentiment === "Bearish" ? 40 - Math.round(score / 5) : 50,
+    relatedAssets: row.symbol ? [row.symbol] : [],
+    timestamp: relativeTime(row.published_at),
+    url: row.url,
   };
-  isBookmarked: boolean;
 }
 
 export default function NewsFeedPage() {
@@ -50,129 +85,37 @@ export default function NewsFeedPage() {
   const [selectedSource, setSelectedSource] = useState<Source | "all">("all");
   const [selectedSentiment, setSelectedSentiment] = useState<Sentiment | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [rows, setRows] = useState<NewsRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const newsItems: NewsItem[] = [
-    {
-      id: 1,
-      title: "Apple Reports Record Q1 Earnings, Beats Wall Street Expectations",
-      summary:
-        "Apple Inc. reported quarterly revenue of $119.6 billion, beating analyst expectations of $117.9 billion. iPhone sales remained strong despite global economic headwinds, with services revenue hitting an all-time high.",
-      source: "News",
-      sourceName: "Bloomberg",
-      sentiment: "Bullish",
-      sentimentScore: 87,
-      relatedAssets: ["AAPL", "NASDAQ"],
-      timestamp: "15 min ago",
-      url: "#",
-      engagement: { likes: 1243, comments: 89, shares: 234 },
-      isBookmarked: false,
-    },
-    {
-      id: 2,
-      title: "Bitcoin Whale Moves $500M to Unknown Wallet - Market Watches Closely",
-      summary:
-        "A large Bitcoin holder has transferred approximately 12,000 BTC worth over $500 million to an unknown wallet address. Analysts are divided on whether this signals upcoming selling pressure or institutional accumulation.",
-      source: "Twitter",
-      sourceName: "@WhaleAlert",
-      sentiment: "Neutral",
-      sentimentScore: 52,
-      relatedAssets: ["BTC", "ETH"],
-      timestamp: "32 min ago",
-      url: "#",
-      engagement: { likes: 3421, comments: 567, shares: 892 },
-      isBookmarked: true,
-    },
-    {
-      id: 3,
-      title: "Tesla Faces Production Challenges at Berlin Gigafactory",
-      summary:
-        "Tesla's Berlin Gigafactory is experiencing production delays due to supply chain issues and regulatory hurdles. The company has reduced its Q2 delivery guidance, causing concern among investors.",
-      source: "News",
-      sourceName: "Reuters",
-      sentiment: "Bearish",
-      sentimentScore: 28,
-      relatedAssets: ["TSLA"],
-      timestamp: "1 hour ago",
-      url: "#",
-      engagement: { likes: 876, comments: 234, shares: 156 },
-      isBookmarked: false,
-    },
-    {
-      id: 4,
-      title: "Federal Reserve Signals Potential Rate Cut in September",
-      summary:
-        "Fed Chair Jerome Powell hinted at a possible interest rate cut in the upcoming September meeting, citing cooling inflation and stable employment figures. Markets rallied on the news.",
-      source: "News",
-      sourceName: "CNBC",
-      sentiment: "Bullish",
-      sentimentScore: 79,
-      relatedAssets: ["SPY", "DXY", "GLD"],
-      timestamp: "2 hours ago",
-      url: "#",
-      engagement: { likes: 2156, comments: 312, shares: 445 },
-      isBookmarked: false,
-    },
-    {
-      id: 5,
-      title: "Ethereum Layer 2 Solutions See Record TVL Growth",
-      summary:
-        "Total Value Locked in Ethereum Layer 2 solutions has reached an all-time high of $45 billion, with Arbitrum and Optimism leading the charge. Gas fees on mainnet have dropped significantly as a result.",
-      source: "Reddit",
-      sourceName: "r/ethereum",
-      sentiment: "Bullish",
-      sentimentScore: 82,
-      relatedAssets: ["ETH", "ARB", "OP"],
-      timestamp: "3 hours ago",
-      url: "#",
-      engagement: { likes: 4532, comments: 678, shares: 321 },
-      isBookmarked: true,
-    },
-    {
-      id: 6,
-      title: "NVIDIA Stock Drops 5% on China Export Restriction Concerns",
-      summary:
-        "NVIDIA shares fell sharply after reports emerged of potential new U.S. restrictions on AI chip exports to China. The company derives approximately 20% of its revenue from the Chinese market.",
-      source: "News",
-      sourceName: "Wall Street Journal",
-      sentiment: "Bearish",
-      sentimentScore: 31,
-      relatedAssets: ["NVDA", "AMD", "INTC"],
-      timestamp: "4 hours ago",
-      url: "#",
-      engagement: { likes: 1876, comments: 423, shares: 287 },
-      isBookmarked: false,
-    },
-    {
-      id: 7,
-      title: "Solana Network Processes Record 65,000 TPS During NFT Mint",
-      summary:
-        "The Solana blockchain achieved a new transaction throughput record during a popular NFT collection mint, processing over 65,000 transactions per second without network degradation.",
-      source: "Twitter",
-      sourceName: "@solaboratory",
-      sentiment: "Bullish",
-      sentimentScore: 88,
-      relatedAssets: ["SOL"],
-      timestamp: "5 hours ago",
-      url: "#",
-      engagement: { likes: 5678, comments: 432, shares: 765 },
-      isBookmarked: false,
-    },
-    {
-      id: 8,
-      title: "Oil Prices Surge Amid Middle East Tensions",
-      summary:
-        "Crude oil prices jumped 4% as geopolitical tensions in the Middle East escalated. Brent crude topped $85 per barrel, with analysts warning of potential supply disruptions.",
-      source: "News",
-      sourceName: "Financial Times",
-      sentiment: "Neutral",
-      sentimentScore: 55,
-      relatedAssets: ["CL", "XOM", "CVX"],
-      timestamp: "6 hours ago",
-      url: "#",
-      engagement: { likes: 987, comments: 156, shares: 198 },
-      isBookmarked: false,
-    },
-  ];
+  const loadNews = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/news-feed?limit=50", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string" ? data.error : `Failed (${res.status}).`,
+        );
+      }
+      setRows((data.items ?? []) as NewsRow[]);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load news.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNews();
+  }, [loadNews]);
+
+  const newsItems: NewsItem[] = useMemo(() => rows.map(mapRow), [rows]);
 
   const getSentimentColor = (sentiment: Sentiment) => {
     switch (sentiment) {
@@ -196,28 +139,16 @@ export default function NewsFeedPage() {
     }
   };
 
-  const getSourceIcon = (source: Source) => {
-    switch (source) {
-      case "News":
-        return <Newspaper size={14} />;
-      case "Twitter":
-        return <Twitter size={14} />;
-      case "Reddit":
-        return <MessageSquare size={14} />;
-      case "Telegram":
-        return <Globe size={14} />;
-    }
-  };
-
   const filteredNews = newsItems.filter((item) => {
     const matchesSource = selectedSource === "all" || item.source === selectedSource;
-    const matchesSentiment = selectedSentiment === "all" || item.sentiment === selectedSentiment;
+    const matchesSentiment =
+      selectedSentiment === "all" || item.sentiment === selectedSentiment;
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.relatedAssets.some((asset) =>
-        asset.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      !q ||
+      item.title.toLowerCase().includes(q) ||
+      item.sourceName.toLowerCase().includes(q) ||
+      item.relatedAssets.some((asset) => asset.toLowerCase().includes(q));
     return matchesSource && matchesSentiment && matchesSearch;
   });
 
@@ -248,8 +179,17 @@ export default function NewsFeedPage() {
               </div>
             </div>
 
-            <button className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg flex items-center gap-2">
-              <RefreshCw size={16} />
+            <button
+              type="button"
+              onClick={loadNews}
+              disabled={loading}
+              className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg flex items-center gap-2 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
               Refresh
             </button>
           </div>
@@ -276,14 +216,14 @@ export default function NewsFeedPage() {
                 <Filter size={16} className="text-gray-400" />
                 <select
                   value={selectedSource}
-                  onChange={(e) => setSelectedSource(e.target.value as Source | "all")}
+                  onChange={(e) =>
+                    setSelectedSource(e.target.value as Source | "all")
+                  }
                   className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:border-cyan-500/50"
                 >
                   <option value="all">All Sources</option>
-                  <option value="News">News</option>
-                  <option value="Twitter">Twitter</option>
-                  <option value="Reddit">Reddit</option>
-                  <option value="Telegram">Telegram</option>
+                  <option value="Analysis">From My Analyses</option>
+                  <option value="Watchlist">Watchlist Cache</option>
                 </select>
               </div>
 
@@ -313,11 +253,10 @@ export default function NewsFeedPage() {
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex items-center gap-2 text-sm text-gray-400">
                       <span className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-lg">
-                        {getSourceIcon(item.source)}
+                        <Newspaper size={14} />
                         {item.sourceName}
                       </span>
-                      <span className="flex items-center gap-1">
-                        <Clock size={14} />
+                      <span className="text-xs text-gray-500">
                         {item.timestamp}
                       </span>
                     </div>
@@ -330,13 +269,15 @@ export default function NewsFeedPage() {
                     </span>
                   </div>
 
-                  {/* Title & Summary */}
-                  <h3 className="text-lg font-semibold mb-2 hover:text-cyan-400 transition-colors cursor-pointer">
+                  {/* Title */}
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-lg font-semibold mb-2 hover:text-cyan-400 transition-colors"
+                  >
                     {item.title}
-                  </h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-4">
-                    {item.summary}
-                  </p>
+                  </a>
 
                   {/* Related Assets */}
                   <div className="flex flex-wrap gap-2 mb-4">
@@ -352,47 +293,46 @@ export default function NewsFeedPage() {
 
                   {/* Footer */}
                   <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                    <div className="flex items-center gap-4 text-sm text-gray-400">
-                      <button className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors">
-                        <ThumbsUp size={16} />
-                        {item.engagement.likes.toLocaleString()}
-                      </button>
-                      <button className="flex items-center gap-1.5 hover:text-cyan-400 transition-colors">
-                        <MessageSquare size={16} />
-                        {item.engagement.comments}
-                      </button>
-                      <button className="flex items-center gap-1.5 hover:text-purple-400 transition-colors">
-                        <Share2 size={16} />
-                        {item.engagement.shares}
-                      </button>
+                    <div className="text-xs text-gray-500">
+                      Origin: {item.source === "Analysis" ? "Your analysis" : "Watchlist cache"}
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        className={`p-2 rounded-lg transition-colors ${
-                          item.isBookmarked
-                            ? "text-amber-400 bg-amber-500/10"
-                            : "text-gray-400 hover:text-amber-400 hover:bg-white/5"
-                        }`}
-                      >
-                        <Bookmark size={16} fill={item.isBookmarked ? "currentColor" : "none"} />
-                      </button>
-                      <button className="flex items-center gap-1.5 px-3 py-1.5 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors text-sm">
-                        <ExternalLink size={14} />
-                        Read More
-                      </button>
-                    </div>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors text-sm"
+                    >
+                      <ExternalLink size={14} />
+                      Read More
+                    </a>
                   </div>
                 </div>
               </div>
             ))}
 
-            {filteredNews.length === 0 && (
+            {loading && rows.length === 0 && (
+              <div className="text-center py-12 bg-zinc-950/80 border border-white/10 rounded-xl">
+                <Loader2 className="mx-auto mb-3 text-gray-500 animate-spin" size={32} />
+                <p className="text-gray-400 text-sm">Loading news…</p>
+              </div>
+            )}
+
+            {loadError && (
+              <div className="text-center py-12 bg-zinc-950/80 border border-red-500/30 rounded-xl">
+                <AlertCircle className="mx-auto mb-3 text-red-400" size={32} />
+                <h3 className="text-lg font-semibold mb-1">Couldn&apos;t load news</h3>
+                <p className="text-gray-400 text-sm">{loadError}</p>
+              </div>
+            )}
+
+            {!loading && !loadError && filteredNews.length === 0 && (
               <div className="text-center py-12 bg-zinc-950/80 border border-white/10 rounded-xl">
                 <Newspaper className="mx-auto mb-3 text-gray-500" size={48} />
                 <h3 className="text-lg font-semibold mb-1">No news found</h3>
                 <p className="text-gray-400 text-sm">
-                  Try adjusting your filters or search query
+                  {newsItems.length === 0
+                    ? "Run an analysis or add symbols to your watchlist to populate this feed."
+                    : "Try adjusting your filters or search query."}
                 </p>
               </div>
             )}

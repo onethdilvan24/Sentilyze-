@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { createClient as createSupabaseServerClient } from "@/utils/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -95,7 +96,7 @@ export async function POST(req: Request) {
       };
     });
 
-    return NextResponse.json({
+    const responsePayload = {
       symbol: rawSymbol.toUpperCase(),
       timestamp: new Date().toISOString(),
       overallSentiment: analysis.overallSentiment,
@@ -104,7 +105,65 @@ export async function POST(req: Request) {
       aiScore: clamp(analysis.aiScore, 0, 100),
       summary: analysis.summary,
       newsItems,
-    });
+    };
+
+    // Persist analysis to Supabase. Failures are logged, never break the response.
+    try {
+      const supabase = await createSupabaseServerClient();
+      const user = await currentUser();
+      const email = user?.emailAddresses?.[0]?.emailAddress ?? null;
+      const displayName =
+        user?.firstName && user?.lastName
+          ? `${user.firstName} ${user.lastName}`
+          : (user?.firstName ?? user?.username ?? null);
+
+      await supabase.from("profiles").upsert(
+        {
+          clerk_user_id: userId,
+          email,
+          display_name: displayName,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "clerk_user_id" },
+      );
+
+      const { data: inserted, error: analysisErr } = await supabase
+        .from("analyses")
+        .insert({
+          clerk_user_id: userId,
+          symbol: responsePayload.symbol,
+          overall_sentiment: responsePayload.overallSentiment,
+          signal: responsePayload.signal,
+          confidence: responsePayload.confidence,
+          ai_score: responsePayload.aiScore,
+          summary: responsePayload.summary,
+        })
+        .select("id")
+        .single();
+
+      if (analysisErr) throw analysisErr;
+
+      if (inserted?.id && newsItems.length > 0) {
+        const { error: newsErr } = await supabase
+          .from("analysis_news_items")
+          .insert(
+            newsItems.map((n) => ({
+              analysis_id: inserted.id,
+              title: n.title,
+              source: n.source,
+              sentiment: n.sentiment,
+              impact_score: n.impactScore,
+              url: n.url,
+              published_at: n.publishedAt,
+            })),
+          );
+        if (newsErr) throw newsErr;
+      }
+    } catch (persistErr) {
+      console.warn("[api/analyze] supabase persist failed", persistErr);
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (err) {
     console.error("[api/analyze]", err);
     const message =

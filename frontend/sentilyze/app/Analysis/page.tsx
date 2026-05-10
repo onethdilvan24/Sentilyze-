@@ -1,23 +1,20 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  TrendingUp,
-  TrendingDown,
   Download,
-  ArrowUpRight,
-  ArrowDownRight,
-  ExternalLink,
   RefreshCw,
   Zap,
   AlertCircle,
   Clock,
   Activity,
-  Target,
   Newspaper,
   Menu,
   X,
   Loader2,
+  History,
+  ExternalLink,
+  Target,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 
@@ -43,6 +40,26 @@ interface AnalysisApiResponse {
   }>;
 }
 
+interface RecentAnalysisRow {
+  id: string;
+  symbol: string;
+  overall_sentiment: OverallSentiment;
+  signal: Signal;
+  confidence: number;
+  ai_score: number;
+  summary: string;
+  created_at: string;
+  analysis_news_items: Array<{
+    id: string;
+    title: string;
+    source: string;
+    sentiment: string;
+    impact_score: number;
+    url: string;
+    published_at: string;
+  }>;
+}
+
 export default function AnalysisPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<Impact | "all">("all");
@@ -52,6 +69,56 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] =
     useState<AnalysisApiResponse | null>(null);
+
+  const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysisRow[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+
+  const loadRecentAnalyses = useCallback(async () => {
+    setRecentLoading(true);
+    try {
+      const res = await fetch("/api/analyses?limit=10", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setRecentAnalyses((data.analyses ?? []) as RecentAnalysisRow[]);
+      }
+    } catch (e) {
+      console.warn("[analysis] failed to load recent analyses", e);
+    } finally {
+      setRecentLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecentAnalyses();
+  }, [loadRecentAnalyses]);
+
+  const showRecentAnalysis = (row: RecentAnalysisRow) => {
+    const newsItems = (row.analysis_news_items ?? []).map((n) => ({
+      title: n.title,
+      source: n.source,
+      sentiment: (n.sentiment as Impact) ?? "Neutral",
+      impactScore: n.impact_score ?? 5,
+      url: n.url,
+      publishedAt: n.published_at,
+    }));
+    setAnalysisResult({
+      symbol: row.symbol,
+      timestamp: row.created_at,
+      overallSentiment: row.overall_sentiment,
+      signal: row.signal,
+      confidence: row.confidence,
+      aiScore: row.ai_score,
+      summary: row.summary,
+      newsItems,
+    });
+    setMarketInput(row.symbol);
+    setError(null);
+    setSelectedFilter("all");
+    setSearchQuery("");
+  };
 
   const handleAnalyze = async () => {
     const symbol = marketInput.trim();
@@ -84,6 +151,7 @@ export default function AnalysisPage() {
       }
 
       setAnalysisResult(data as AnalysisApiResponse);
+      loadRecentAnalyses();
     } catch (e) {
       setAnalysisResult(null);
       setError(
@@ -206,6 +274,62 @@ export default function AnalysisPage() {
         </header>
 
         <div className="p-6 space-y-6">
+          {/* Recent Analyses */}
+          <div className="bg-zinc-950/80 border border-white/10 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <History size={18} className="text-cyan-400" />
+                <h2 className="text-lg font-semibold">Recent analyses</h2>
+              </div>
+              <button
+                type="button"
+                onClick={loadRecentAnalyses}
+                disabled={recentLoading}
+                className="text-xs text-gray-400 hover:text-cyan-400 transition-colors disabled:opacity-50 flex items-center gap-1"
+              >
+                <RefreshCw size={12} className={recentLoading ? "animate-spin" : ""} />
+                Refresh
+              </button>
+            </div>
+            {recentLoading && recentAnalyses.length === 0 ? (
+              <p className="text-sm text-gray-400">Loading…</p>
+            ) : recentAnalyses.length === 0 ? (
+              <p className="text-sm text-gray-400">
+                Your past analyses will appear here once you run one.
+              </p>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {recentAnalyses.map((row) => {
+                  const sentimentClass =
+                    row.overall_sentiment === "Bullish"
+                      ? "border-emerald-500/40 text-emerald-400"
+                      : row.overall_sentiment === "Bearish"
+                        ? "border-red-500/40 text-red-400"
+                        : "border-amber-500/40 text-amber-400";
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => showRecentAnalysis(row)}
+                      className={`shrink-0 text-left px-3 py-2 rounded-lg border bg-white/5 hover:bg-white/10 transition-colors ${sentimentClass}`}
+                    >
+                      <div className="font-bold text-sm text-white">{row.symbol}</div>
+                      <div className="text-[11px] mt-0.5">
+                        {row.signal} · {row.confidence}%
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-0.5">
+                        {new Date(row.created_at).toLocaleString(undefined, {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Market Input Section */}
           <div className="bg-zinc-950/80 border border-white/10 rounded-xl p-5">
             <h2 className="text-lg font-semibold mb-3">

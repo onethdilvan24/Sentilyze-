@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -33,12 +33,53 @@ import { useUser, UserButton } from "@clerk/nextjs";
 type DashSignal = "BUY" | "SELL" | "HOLD";
 type DashSentiment = "Bullish" | "Bearish" | "Neutral";
 
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return iso;
+  const diffSec = Math.max(1, Math.round((Date.now() - then) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const m = Math.round(diffSec / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return `${d}d ago`;
+}
+
+interface AnalysisRow {
+  id: string;
+  symbol: string;
+  overall_sentiment: DashSentiment;
+  signal: DashSignal;
+  confidence: number;
+  ai_score: number;
+  summary: string;
+  created_at: string;
+  analysis_news_items: Array<{
+    id: string;
+    title: string;
+    source: string;
+    sentiment: string;
+    impact_score: number;
+    url: string;
+    published_at: string;
+  }>;
+}
+
+const TIMEFRAME_DAYS: Record<string, number> = {
+  "1h": 1 / 24,
+  "24h": 1,
+  "7d": 7,
+  "30d": 30,
+};
+
 export default function SentilyzeDashboard() {
   const { user, isLoaded } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedTimeframe, setSelectedTimeframe] = useState("7d");
+  const [analyses, setAnalyses] = useState<AnalysisRow[]>([]);
+  const [analysesLoading, setAnalysesLoading] = useState(true);
 
-  // Get user's display name and initials
   const displayName = user?.firstName || user?.username || "User";
   const initials = user?.firstName && user?.lastName
     ? `${user.firstName[0]}${user.lastName[0]}`
@@ -48,126 +89,169 @@ export default function SentilyzeDashboard() {
     ? user.username.substring(0, 2).toUpperCase()
     : "U";
 
-  // Sample data
-  const sentimentOverview = {
-    totalSignals: 1247,
-    signalChange: 12.5,
-    bullishSignals: 634,
-    bullishChange: 18.2,
-    bearishSignals: 421,
-    bearishChange: -5.3,
-    neutralSignals: 192,
-    neutralChange: 3.1,
-    accuracy: 87.4,
-    accuracyChange: 2.1,
-  };
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setAnalysesLoading(true);
+      try {
+        const res = await fetch("/api/analyses?limit=100", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok) {
+          setAnalyses((data.analyses ?? []) as AnalysisRow[]);
+        }
+      } catch (e) {
+        console.warn("[dashboard] failed to load analyses", e);
+      } finally {
+        if (!cancelled) setAnalysesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const topSignals = [
-    {
-      id: 1,
-      asset: "AAPL",
-      name: "Apple Inc.",
-      type: "Stock",
-      signal: "BUY",
-      sentiment: "Bullish",
-      confidence: 92.5,
-      price: "$182.45",
-      change: 2.3,
-      sources: 47,
-      trend: "up",
-    },
-    {
-      id: 2,
-      asset: "BTC/USD",
-      name: "Bitcoin",
-      type: "Crypto",
-      signal: "HOLD",
-      sentiment: "Neutral",
-      confidence: 78.2,
-      price: "$43,250",
-      change: 0.8,
-      sources: 89,
-      trend: "neutral",
-    },
-    {
-      id: 3,
-      asset: "TSLA",
-      name: "Tesla Inc.",
-      type: "Stock",
-      signal: "SELL",
-      sentiment: "Bearish",
-      confidence: 85.7,
-      price: "$238.72",
-      change: -3.2,
-      sources: 62,
-      trend: "down",
-    },
-    {
-      id: 4,
-      asset: "EUR/USD",
-      name: "Euro/US Dollar",
-      type: "Forex",
-      signal: "BUY",
-      sentiment: "Bullish",
-      confidence: 81.3,
-      price: "1.0876",
-      change: 1.5,
-      sources: 34,
-      trend: "up",
-    },
-    {
-      id: 5,
-      asset: "NVDA",
-      name: "NVIDIA Corp.",
-      type: "Stock",
-      signal: "BUY",
-      sentiment: "Bullish",
-      confidence: 94.1,
-      price: "$495.32",
-      change: 4.7,
-      sources: 71,
-      trend: "up",
-    },
-  ];
+  const sentimentOverview = useMemo(() => {
+    const days = TIMEFRAME_DAYS[selectedTimeframe] ?? 7;
+    const windowStart = Date.now() - days * 24 * 60 * 60 * 1000;
+    const prevStart = Date.now() - 2 * days * 24 * 60 * 60 * 1000;
 
-  const recentNews = [
-    {
-      id: 1,
-      title: "Fed Signals Potential Rate Cuts in Q2 2026",
-      source: "Bloomberg",
-      sentiment: "Bullish",
-      impact: "High",
-      time: "15 min ago",
-      affectedAssets: ["SPY", "DIA", "QQQ"],
-    },
-    {
-      id: 2,
-      title: "Apple Announces Record Q1 Revenue",
-      source: "CNBC",
-      sentiment: "Bullish",
-      impact: "Medium",
-      time: "1 hour ago",
-      affectedAssets: ["AAPL"],
-    },
-    {
-      id: 3,
-      title: "Bitcoin ETF Sees Major Institutional Inflows",
-      source: "CoinDesk",
-      sentiment: "Bullish",
-      impact: "High",
-      time: "2 hours ago",
-      affectedAssets: ["BTC", "ETH"],
-    },
-    {
-      id: 4,
-      title: "Tesla Recalls 50K Vehicles Due to Software Issue",
-      source: "Reuters",
-      sentiment: "Bearish",
-      impact: "Medium",
-      time: "3 hours ago",
-      affectedAssets: ["TSLA"],
-    },
-  ];
+    const inWindow = analyses.filter(
+      (a) => new Date(a.created_at).getTime() >= windowStart,
+    );
+    const inPrev = analyses.filter((a) => {
+      const t = new Date(a.created_at).getTime();
+      return t >= prevStart && t < windowStart;
+    });
+
+    const count = (rows: AnalysisRow[], s: DashSentiment) =>
+      rows.filter((r) => r.overall_sentiment === s).length;
+
+    const total = inWindow.length;
+    const totalPrev = inPrev.length;
+    const bullish = count(inWindow, "Bullish");
+    const bullishPrev = count(inPrev, "Bullish");
+    const bearish = count(inWindow, "Bearish");
+    const bearishPrev = count(inPrev, "Bearish");
+    const neutral = count(inWindow, "Neutral");
+    const neutralPrev = count(inPrev, "Neutral");
+
+    const avgConfidence =
+      total > 0
+        ? Math.round(
+            inWindow.reduce((acc, r) => acc + (r.ai_score || r.confidence), 0) /
+              total,
+          )
+        : 0;
+    const avgConfidencePrev =
+      totalPrev > 0
+        ? Math.round(
+            inPrev.reduce((acc, r) => acc + (r.ai_score || r.confidence), 0) /
+              totalPrev,
+          )
+        : 0;
+
+    const pctChange = (curr: number, prev: number) =>
+      prev === 0 ? (curr > 0 ? 100 : 0) : Math.round(((curr - prev) / prev) * 1000) / 10;
+
+    return {
+      totalSignals: total,
+      signalChange: pctChange(total, totalPrev),
+      bullishSignals: bullish,
+      bullishChange: pctChange(bullish, bullishPrev),
+      bearishSignals: bearish,
+      bearishChange: pctChange(bearish, bearishPrev),
+      neutralSignals: neutral,
+      neutralChange: pctChange(neutral, neutralPrev),
+      accuracy: avgConfidence,
+      accuracyChange: pctChange(avgConfidence, avgConfidencePrev),
+    };
+  }, [analyses, selectedTimeframe]);
+
+  const recentTopSignals = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{
+      id: string;
+      asset: string;
+      name: string;
+      type: string;
+      signal: DashSignal;
+      sentiment: DashSentiment;
+      confidence: number;
+      price: string;
+      change: number;
+      sources: number;
+      trend: string;
+    }> = [];
+
+    for (const a of analyses) {
+      if (seen.has(a.symbol)) continue;
+      seen.add(a.symbol);
+      list.push({
+        id: a.id,
+        asset: a.symbol,
+        name: a.symbol,
+        type: "Asset",
+        signal: a.signal,
+        sentiment: a.overall_sentiment,
+        confidence: a.confidence,
+        price: "—",
+        change:
+          a.overall_sentiment === "Bullish"
+            ? +(a.confidence / 30).toFixed(1)
+            : a.overall_sentiment === "Bearish"
+              ? -+(a.confidence / 30).toFixed(1)
+              : 0,
+        sources: a.analysis_news_items?.length ?? 0,
+        trend:
+          a.overall_sentiment === "Bullish"
+            ? "up"
+            : a.overall_sentiment === "Bearish"
+              ? "down"
+              : "neutral",
+      });
+      if (list.length >= 5) break;
+    }
+    return list;
+  }, [analyses]);
+
+  const recentNewsItems = useMemo(() => {
+    const items: Array<{
+      id: string;
+      title: string;
+      source: string;
+      sentiment: DashSentiment;
+      impact: string;
+      time: string;
+      affectedAssets: string[];
+    }> = [];
+    for (const a of analyses) {
+      for (const n of a.analysis_news_items ?? []) {
+        items.push({
+          id: n.id,
+          title: n.title,
+          source: n.source,
+          sentiment:
+            n.sentiment === "Positive"
+              ? "Bullish"
+              : n.sentiment === "Negative"
+                ? "Bearish"
+                : "Neutral",
+          impact: n.impact_score >= 7 ? "High" : "Medium",
+          time: relativeTime(n.published_at),
+          affectedAssets: [a.symbol],
+        });
+        if (items.length >= 6) break;
+      }
+      if (items.length >= 6) break;
+    }
+    return items;
+  }, [analyses]);
+
+  const topSignals = recentTopSignals;
+  const recentNews = recentNewsItems;
 
   const trendingAssets = [
     { asset: "NVDA", mentions: 2847, change: 45.2, sentiment: "Bullish" },
@@ -463,6 +547,14 @@ export default function SentilyzeDashboard() {
               </div>
 
               <div className="divide-y divide-white/5">
+                {analysesLoading && topSignals.length === 0 && (
+                  <div className="p-6 text-sm text-gray-400">Loading signals…</div>
+                )}
+                {!analysesLoading && topSignals.length === 0 && (
+                  <div className="p-6 text-sm text-gray-400">
+                    No signals yet. Run an analysis on the Analysis page to populate this view.
+                  </div>
+                )}
                 {topSignals.map((signal) => (
                   <div
                     key={signal.id}
@@ -606,6 +698,14 @@ export default function SentilyzeDashboard() {
               </div>
 
               <div className="divide-y divide-white/5">
+                {analysesLoading && recentNews.length === 0 && (
+                  <div className="p-6 text-sm text-gray-400">Loading news…</div>
+                )}
+                {!analysesLoading && recentNews.length === 0 && (
+                  <div className="p-6 text-sm text-gray-400">
+                    News will appear here once you run an analysis.
+                  </div>
+                )}
                 {recentNews.map((news) => (
                   <div
                     key={news.id}

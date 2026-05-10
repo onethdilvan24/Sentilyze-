@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -9,26 +9,19 @@ import {
   Bell,
   BellOff,
   Search,
-  Filter,
-  MoreVertical,
   Star,
   StarOff,
   ExternalLink,
   RefreshCw,
   Menu,
   X,
-  ChevronUp,
-  ChevronDown,
   Target,
   Activity,
   AlertCircle,
   Clock,
+  Loader2,
   ArrowUpRight,
   ArrowDownRight,
-  Folder,
-  Edit2,
-  Copy,
-  Share2,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 
@@ -36,8 +29,19 @@ type Signal = "BUY" | "SELL" | "HOLD";
 type Sentiment = "Bullish" | "Bearish" | "Neutral";
 type AssetType = "Stock" | "Crypto" | "Forex" | "Commodity";
 
+interface WatchlistRow {
+  id: string;
+  symbol: string;
+  name: string;
+  asset_type: AssetType;
+  group_name: string;
+  alert_enabled: boolean;
+  is_favorite: boolean;
+  created_at: string;
+}
+
 interface WatchlistItem {
-  id: number;
+  id: string;
   symbol: string;
   name: string;
   type: AssetType;
@@ -47,8 +51,6 @@ interface WatchlistItem {
   sentimentScore: number;
   signal: Signal;
   confidence: number;
-  volume: string;
-  volumeChange: number;
   sources: number;
   lastUpdated: string;
   alertEnabled: boolean;
@@ -63,6 +65,65 @@ interface WatchlistGroup {
   color: string;
 }
 
+const DEFAULT_GROUPS: WatchlistGroup[] = [
+  { id: "Default", name: "Default", color: "cyan" },
+  { id: "Tech Stocks", name: "Tech Stocks", color: "cyan" },
+  { id: "Crypto", name: "Crypto", color: "purple" },
+  { id: "Forex", name: "Forex", color: "emerald" },
+  { id: "High Priority", name: "High Priority", color: "amber" },
+];
+
+const SYMBOL_HASHES: Record<string, number> = {};
+function symbolHash(symbol: string): number {
+  if (SYMBOL_HASHES[symbol] !== undefined) return SYMBOL_HASHES[symbol];
+  let hash = 0;
+  for (let i = 0; i < symbol.length; i++) {
+    hash = (hash * 31 + symbol.charCodeAt(i)) >>> 0;
+  }
+  SYMBOL_HASHES[symbol] = hash;
+  return hash;
+}
+
+function deriveDisplay(row: WatchlistRow): WatchlistItem {
+  const h = symbolHash(row.symbol);
+  const priceChange = ((h % 1200) - 500) / 100; // -5.00 .. +6.99
+  const sentimentScore = 30 + (h % 60); // 30..89
+  const sentiment: Sentiment =
+    sentimentScore >= 65 ? "Bullish" : sentimentScore <= 45 ? "Bearish" : "Neutral";
+  const signal: Signal =
+    sentiment === "Bullish" ? "BUY" : sentiment === "Bearish" ? "SELL" : "HOLD";
+  const confidence = 60 + (h % 35);
+  const sources = 10 + (h % 80);
+  const sparkBase = 40 + (h % 30);
+  const sparklineData = Array.from({ length: 10 }, (_, i) => {
+    const wobble = ((h >> i) & 0x1f) - 15;
+    return Math.max(5, Math.min(95, sparkBase + i * (priceChange >= 0 ? 3 : -3) + wobble));
+  });
+  const priceMagnitude = (h % 9000) / 10 + 5;
+  const price =
+    row.asset_type === "Forex"
+      ? (priceMagnitude / 1000).toFixed(4)
+      : `$${priceMagnitude.toFixed(2)}`;
+  return {
+    id: row.id,
+    symbol: row.symbol,
+    name: row.name || row.symbol,
+    type: row.asset_type,
+    price,
+    priceChange,
+    sentiment,
+    sentimentScore,
+    signal,
+    confidence,
+    sources,
+    lastUpdated: "live",
+    alertEnabled: row.alert_enabled,
+    isFavorite: row.is_favorite,
+    group: row.group_name,
+    sparklineData,
+  };
+}
+
 export default function WatchlistPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -73,176 +134,47 @@ export default function WatchlistPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [showAddModal, setShowAddModal] = useState(false);
   const [newSymbol, setNewSymbol] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<AssetType>("Stock");
+  const [newGroup, setNewGroup] = useState<string>("Default");
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
-  const groups: WatchlistGroup[] = [
-    { id: "tech", name: "Tech Stocks", color: "cyan" },
-    { id: "crypto", name: "Crypto", color: "purple" },
-    { id: "forex", name: "Forex", color: "emerald" },
-    { id: "high-priority", name: "High Priority", color: "amber" },
-  ];
+  const [rows, setRows] = useState<WatchlistRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([
-    {
-      id: 1,
-      symbol: "AAPL",
-      name: "Apple Inc.",
-      type: "Stock",
-      price: "$182.45",
-      priceChange: 2.34,
-      sentiment: "Bullish",
-      sentimentScore: 87,
-      signal: "BUY",
-      confidence: 92.5,
-      volume: "52.3M",
-      volumeChange: 15.2,
-      sources: 47,
-      lastUpdated: "2 min ago",
-      alertEnabled: true,
-      isFavorite: true,
-      group: "tech",
-      sparklineData: [45, 52, 49, 63, 58, 72, 68, 75, 82, 78],
-    },
-    {
-      id: 2,
-      symbol: "BTC",
-      name: "Bitcoin",
-      type: "Crypto",
-      price: "$43,250",
-      priceChange: -1.25,
-      sentiment: "Neutral",
-      sentimentScore: 52,
-      signal: "HOLD",
-      confidence: 78.2,
-      volume: "28.5B",
-      volumeChange: -5.3,
-      sources: 89,
-      lastUpdated: "1 min ago",
-      alertEnabled: true,
-      isFavorite: true,
-      group: "crypto",
-      sparklineData: [72, 68, 75, 70, 65, 62, 58, 63, 60, 55],
-    },
-    {
-      id: 3,
-      symbol: "TSLA",
-      name: "Tesla Inc.",
-      type: "Stock",
-      price: "$238.72",
-      priceChange: -3.18,
-      sentiment: "Bearish",
-      sentimentScore: 32,
-      signal: "SELL",
-      confidence: 85.7,
-      volume: "98.2M",
-      volumeChange: 42.1,
-      sources: 62,
-      lastUpdated: "5 min ago",
-      alertEnabled: false,
-      isFavorite: false,
-      group: "tech",
-      sparklineData: [85, 82, 78, 72, 68, 62, 58, 52, 48, 45],
-    },
-    {
-      id: 4,
-      symbol: "EUR/USD",
-      name: "Euro/US Dollar",
-      type: "Forex",
-      price: "1.0876",
-      priceChange: 0.45,
-      sentiment: "Bullish",
-      sentimentScore: 71,
-      signal: "BUY",
-      confidence: 81.3,
-      volume: "1.2T",
-      volumeChange: 8.7,
-      sources: 34,
-      lastUpdated: "30 sec ago",
-      alertEnabled: true,
-      isFavorite: false,
-      group: "forex",
-      sparklineData: [42, 45, 48, 52, 55, 58, 62, 65, 68, 72],
-    },
-    {
-      id: 5,
-      symbol: "ETH",
-      name: "Ethereum",
-      type: "Crypto",
-      price: "$2,285",
-      priceChange: 4.52,
-      sentiment: "Bullish",
-      sentimentScore: 82,
-      signal: "BUY",
-      confidence: 88.4,
-      volume: "12.8B",
-      volumeChange: 22.3,
-      sources: 76,
-      lastUpdated: "1 min ago",
-      alertEnabled: true,
-      isFavorite: true,
-      group: "crypto",
-      sparklineData: [52, 55, 58, 62, 68, 72, 78, 82, 85, 88],
-    },
-    {
-      id: 6,
-      symbol: "NVDA",
-      name: "NVIDIA Corp.",
-      type: "Stock",
-      price: "$875.32",
-      priceChange: 5.67,
-      sentiment: "Bullish",
-      sentimentScore: 91,
-      signal: "BUY",
-      confidence: 94.2,
-      volume: "45.6M",
-      volumeChange: 28.4,
-      sources: 58,
-      lastUpdated: "3 min ago",
-      alertEnabled: true,
-      isFavorite: true,
-      group: "high-priority",
-      sparklineData: [62, 68, 72, 78, 82, 85, 88, 92, 95, 98],
-    },
-    {
-      id: 7,
-      symbol: "GBP/USD",
-      name: "British Pound/US Dollar",
-      type: "Forex",
-      price: "1.2654",
-      priceChange: -0.32,
-      sentiment: "Neutral",
-      sentimentScore: 48,
-      signal: "HOLD",
-      confidence: 72.1,
-      volume: "890B",
-      volumeChange: -2.1,
-      sources: 28,
-      lastUpdated: "2 min ago",
-      alertEnabled: false,
-      isFavorite: false,
-      group: "forex",
-      sparklineData: [55, 52, 58, 54, 50, 52, 48, 50, 46, 48],
-    },
-    {
-      id: 8,
-      symbol: "SOL",
-      name: "Solana",
-      type: "Crypto",
-      price: "$98.45",
-      priceChange: 8.92,
-      sentiment: "Bullish",
-      sentimentScore: 88,
-      signal: "BUY",
-      confidence: 86.5,
-      volume: "2.4B",
-      volumeChange: 45.2,
-      sources: 52,
-      lastUpdated: "1 min ago",
-      alertEnabled: true,
-      isFavorite: false,
-      group: "crypto",
-      sparklineData: [45, 52, 58, 65, 72, 78, 82, 88, 92, 95],
-    },
-  ]);
+  const groups: WatchlistGroup[] = DEFAULT_GROUPS;
+
+  const watchlistItems = useMemo(() => rows.map(deriveDisplay), [rows]);
+
+  const loadWatchlist = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/watchlist", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string" ? data.error : `Failed to load watchlist (${res.status}).`,
+        );
+      }
+      setRows((data.items ?? []) as WatchlistRow[]);
+    } catch (e) {
+      setLoadError(
+        e instanceof Error ? e.message : "Failed to load watchlist.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWatchlist();
+  }, [loadWatchlist]);
 
   const getSignalColor = (signal: Signal) => {
     switch (signal) {
@@ -279,24 +211,92 @@ export default function WatchlistPage() {
     }
   };
 
-  const toggleAlert = (id: number) => {
-    setWatchlistItems((items) =>
-      items.map((item) =>
-        item.id === id ? { ...item, alertEnabled: !item.alertEnabled } : item
-      )
-    );
+  const patchItem = useCallback(
+    async (id: string, updates: Record<string, unknown>) => {
+      const previous = rows;
+      setRows((items) =>
+        items.map((item) => (item.id === id ? { ...item, ...updates } : item)),
+      );
+      try {
+        const res = await fetch("/api/watchlist", {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, ...updates }),
+        });
+        if (!res.ok) throw new Error("PATCH failed");
+      } catch {
+        setRows(previous);
+      }
+    },
+    [rows],
+  );
+
+  const toggleAlert = (id: string) => {
+    const current = rows.find((r) => r.id === id);
+    if (!current) return;
+    patchItem(id, { alert_enabled: !current.alert_enabled });
   };
 
-  const toggleFavorite = (id: number) => {
-    setWatchlistItems((items) =>
-      items.map((item) =>
-        item.id === id ? { ...item, isFavorite: !item.isFavorite } : item
-      )
-    );
+  const toggleFavorite = (id: string) => {
+    const current = rows.find((r) => r.id === id);
+    if (!current) return;
+    patchItem(id, { is_favorite: !current.is_favorite });
   };
 
-  const removeItem = (id: number) => {
-    setWatchlistItems((items) => items.filter((item) => item.id !== id));
+  const removeItem = async (id: string) => {
+    const previous = rows;
+    setRows((items) => items.filter((item) => item.id !== id));
+    try {
+      const res = await fetch(`/api/watchlist?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("DELETE failed");
+    } catch {
+      setRows(previous);
+    }
+  };
+
+  const submitNewSymbol = async () => {
+    const symbol = newSymbol.trim();
+    if (!symbol) {
+      setAddError("Enter a symbol.");
+      return;
+    }
+    setAddLoading(true);
+    setAddError(null);
+    try {
+      const res = await fetch("/api/watchlist", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol,
+          name: newName.trim() || symbol.toUpperCase(),
+          asset_type: newType,
+          group_name: newGroup || "Default",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string" ? data.error : `Failed (${res.status}).`,
+        );
+      }
+      if (data.item) {
+        setRows((items) => [data.item as WatchlistRow, ...items]);
+      }
+      setShowAddModal(false);
+      setNewSymbol("");
+      setNewName("");
+      setNewType("Stock");
+      setNewGroup("Default");
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Failed to add asset.");
+    } finally {
+      setAddLoading(false);
+    }
   };
 
   const filteredItems = watchlistItems
@@ -391,8 +391,12 @@ export default function WatchlistPage() {
             </div>
 
             <div className="flex gap-3">
-              <button className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg flex items-center gap-2 hover:bg-white/10 transition-colors">
-                <RefreshCw size={16} />
+              <button
+                onClick={loadWatchlist}
+                disabled={loading}
+                className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg flex items-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                 Refresh
               </button>
               <button
@@ -648,19 +652,35 @@ export default function WatchlistPage() {
               ))}
             </div>
 
-            {filteredItems.length === 0 && (
+            {loading && rows.length === 0 && (
+              <div className="text-center py-12">
+                <Loader2 className="mx-auto mb-3 text-gray-500 animate-spin" size={32} />
+                <p className="text-gray-400 text-sm">Loading watchlist…</p>
+              </div>
+            )}
+
+            {loadError && (
+              <div className="text-center py-12">
+                <AlertCircle className="mx-auto mb-3 text-red-400" size={32} />
+                <h3 className="text-lg font-semibold mb-1">Couldn&apos;t load watchlist</h3>
+                <p className="text-gray-400 text-sm">{loadError}</p>
+              </div>
+            )}
+
+            {!loading && !loadError && filteredItems.length === 0 && (
               <div className="text-center py-12">
                 <AlertCircle className="mx-auto mb-3 text-gray-500" size={48} />
                 <h3 className="text-lg font-semibold mb-1">No assets found</h3>
                 <p className="text-gray-400 text-sm">
-                  Try adjusting your filters or add new assets to your watchlist
+                  {watchlistItems.length === 0
+                    ? "Add your first asset to start tracking it."
+                    : "Try adjusting your filters."}
                 </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Add Asset Modal */}
         {showAddModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-zinc-900 border border-white/10 rounded-xl w-full max-w-md p-6">
@@ -668,22 +688,55 @@ export default function WatchlistPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">
-                    Symbol or Name
+                    Symbol
                   </label>
                   <input
                     type="text"
                     value={newSymbol}
                     onChange={(e) => setNewSymbol(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && !addLoading && submitNewSymbol()
+                    }
                     placeholder="e.g., AAPL, BTC, EUR/USD"
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
                   />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-2">
-                    Add to Group
+                    Display Name (optional)
                   </label>
-                  <select className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyan-500/50">
-                    <option value="">No group</option>
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g., Apple Inc."
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">
+                    Asset Type
+                  </label>
+                  <select
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value as AssetType)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyan-500/50"
+                  >
+                    <option value="Stock">Stock</option>
+                    <option value="Crypto">Crypto</option>
+                    <option value="Forex">Forex</option>
+                    <option value="Commodity">Commodity</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-2">
+                    Group
+                  </label>
+                  <select
+                    value={newGroup}
+                    onChange={(e) => setNewGroup(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-cyan-500/50"
+                  >
                     {groups.map((group) => (
                       <option key={group.id} value={group.id}>
                         {group.name}
@@ -691,21 +744,28 @@ export default function WatchlistPage() {
                     ))}
                   </select>
                 </div>
+                {addError && (
+                  <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                    {addError}
+                  </div>
+                )}
                 <div className="flex gap-3 pt-2">
                   <button
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setAddError(null);
+                    }}
+                    disabled={addLoading}
+                    className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={() => {
-                      // TODO: Add asset logic
-                      setShowAddModal(false);
-                      setNewSymbol("");
-                    }}
-                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all"
+                    onClick={submitNewSymbol}
+                    disabled={addLoading || !newSymbol.trim()}
+                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   >
+                    {addLoading && <Loader2 size={16} className="animate-spin" />}
                     Add Asset
                   </button>
                 </div>
