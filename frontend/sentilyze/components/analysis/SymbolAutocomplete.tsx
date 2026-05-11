@@ -26,31 +26,31 @@ export default function SymbolAutocomplete({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const prevValueRef = useRef(value);
 
   const suggestions = useMemo(() => searchSymbols(value), [value]);
 
-  // Reset active index when suggestions change
-  useEffect(() => {
-    setActiveIndex(-1);
-  }, [suggestions]);
+  // Derive whether dropdown should be open based on focus and suggestions
+  const shouldShowDropdown = open && isFocused && suggestions.length > 0;
 
-  // Open dropdown when there are suggestions and input is focused
-  useEffect(() => {
-    if (suggestions.length > 0 && document.activeElement === inputRef.current) {
-      setOpen(true);
-    } else if (suggestions.length === 0) {
-      setOpen(false);
+  // Reset active index when value changes (user typed something new)
+  if (prevValueRef.current !== value) {
+    prevValueRef.current = value;
+    if (activeIndex !== -1) {
+      setActiveIndex(-1);
     }
-  }, [suggestions]);
+  }
 
   // Click outside handler
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setIsFocused(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -116,6 +116,7 @@ export default function SymbolAutocomplete({
   };
 
   const handleFocus = () => {
+    setIsFocused(true);
     if (suggestions.length > 0) {
       setOpen(true);
     }
@@ -126,6 +127,7 @@ export default function SymbolAutocomplete({
     setTimeout(() => {
       if (!containerRef.current?.contains(document.activeElement)) {
         setOpen(false);
+        setIsFocused(false);
         setActiveIndex(-1);
       }
     }, 150);
@@ -137,7 +139,12 @@ export default function SymbolAutocomplete({
         ref={inputRef}
         type="text"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          if (e.target.value.trim().length > 0) {
+            setOpen(true);
+          }
+        }}
         onKeyDown={handleKeyDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
@@ -147,7 +154,7 @@ export default function SymbolAutocomplete({
         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all disabled:opacity-50"
       />
 
-      {open && suggestions.length > 0 && (
+      {shouldShowDropdown && (
         <ul
           ref={listRef}
           className="absolute left-0 right-0 top-full mt-1 z-20 bg-zinc-950 border border-white/10 rounded-lg shadow-lg max-h-72 overflow-y-auto"

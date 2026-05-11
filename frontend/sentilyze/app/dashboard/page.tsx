@@ -8,20 +8,10 @@ import {
   Bell,
   Search,
   Settings,
-  LayoutDashboard,
   Target,
-  Newspaper,
-  BarChart3,
-  Users,
-  Zap,
-  ChevronDown,
-  Activity,
-  DollarSign,
   Percent,
-  AlertCircle,
   ExternalLink,
   Filter,
-  Calendar,
   Menu,
   X,
   ArrowUpRight,
@@ -81,13 +71,6 @@ export default function SentilyzeDashboard() {
   const [analysesLoading, setAnalysesLoading] = useState(true);
 
   const displayName = user?.firstName || user?.username || "User";
-  const initials = user?.firstName && user?.lastName
-    ? `${user.firstName[0]}${user.lastName[0]}`
-    : user?.firstName
-    ? user.firstName.substring(0, 2)
-    : user?.username
-    ? user.username.substring(0, 2).toUpperCase()
-    : "U";
 
   useEffect(() => {
     let cancelled = false;
@@ -375,7 +358,7 @@ export default function SentilyzeDashboard() {
                   Welcome Back{isLoaded && user ? `, ${displayName}` : ""}!
                 </h1>
                 <p className="text-sm text-gray-400">
-                  Here's what's happening with your signals today
+                  Here&apos;s what&apos;s happening with your signals today
                 </p>
               </div>
             </div>

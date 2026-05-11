@@ -623,7 +623,7 @@ export default function SentilyzeLanding() {
             </h2>
             <p className="text-base sm:text-lg text-gray-300 max-w-2xl mx-auto px-4">
               Get AI-powered sentiment analysis across all major financial
-              markets. From stocks to crypto, we've got you covered.
+              markets. From stocks to crypto, we&apos;ve got you covered.
             </p>
           </div>
 
@@ -761,7 +761,7 @@ export default function SentilyzeLanding() {
 
                 <div className="space-y-2.5 sm:space-y-3">
                   <div className="text-xs sm:text-sm font-bold mb-2 sm:mb-3">
-                    What's Included:
+                    What&apos;s Included:
                   </div>
                   {plan.features.map((feature, fidx) => (
                     <div key={fidx} className="flex items-start gap-2">
@@ -789,7 +789,7 @@ export default function SentilyzeLanding() {
               Loved by <span className="gradient-text">15,000+ Traders</span>
             </h2>
             <p className="text-base sm:text-lg text-gray-300 px-4">
-              Don't just take our word for it. Here's what our community has to
+              Don&apos;t just take our word for it. Here&apos;s what our community has to
               say about Sentilyze.
             </p>
           </div>
