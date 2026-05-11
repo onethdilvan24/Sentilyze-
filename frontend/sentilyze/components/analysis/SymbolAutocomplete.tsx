@@ -30,20 +30,11 @@ export default function SymbolAutocomplete({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const prevValueRef = useRef(value);
 
   const suggestions = useMemo(() => searchSymbols(value), [value]);
 
   // Derive whether dropdown should be open based on focus and suggestions
   const shouldShowDropdown = open && isFocused && suggestions.length > 0;
-
-  // Reset active index when value changes (user typed something new)
-  if (prevValueRef.current !== value) {
-    prevValueRef.current = value;
-    if (activeIndex !== -1) {
-      setActiveIndex(-1);
-    }
-  }
 
   // Click outside handler
   useEffect(() => {
@@ -141,6 +132,7 @@ export default function SymbolAutocomplete({
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
+          setActiveIndex(-1);
           if (e.target.value.trim().length > 0) {
             setOpen(true);
           }
