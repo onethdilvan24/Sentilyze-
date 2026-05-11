@@ -17,6 +17,7 @@ import {
   Target,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
+import SymbolAutocomplete from "@/components/analysis/SymbolAutocomplete";
 
 type Signal = "BUY" | "SELL" | "HOLD";
 type Impact = "Positive" | "Negative" | "Neutral";
@@ -336,14 +337,12 @@ export default function AnalysisPage() {
               Enter Market to Analyze
             </h2>
             <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
+              <SymbolAutocomplete
                 value={marketInput}
-                onChange={(e) => setMarketInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !loading && handleAnalyze()}
+                onChange={setMarketInput}
+                onSubmit={() => { if (!loading) handleAnalyze(); }}
                 disabled={loading}
-                placeholder="Enter market symbol (e.g., AAPL, BTC, EUR/USD)"
-                className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all disabled:opacity-50"
+                placeholder="Search symbol or name (e.g., apple, bitcoin, EUR/USD)"
               />
               <button
                 type="button"
