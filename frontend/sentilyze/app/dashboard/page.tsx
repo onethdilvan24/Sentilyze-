@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   TrendingUp,
   TrendingDown,
   Minus,
-  Bell,
   Search,
   Settings,
   Target,
@@ -18,6 +19,8 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
+import NotificationBell from "@/components/layout/NotificationBell";
+import SymbolAutocomplete from "@/components/analysis/SymbolAutocomplete";
 import { useUser, UserButton } from "@clerk/nextjs";
 
 type DashSignal = "BUY" | "SELL" | "HOLD";
@@ -64,13 +67,21 @@ const TIMEFRAME_DAYS: Record<string, number> = {
 };
 
 export default function SentilyzeDashboard() {
+  const router = useRouter();
   const { user, isLoaded } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
   const [selectedTimeframe, setSelectedTimeframe] = useState("7d");
   const [analyses, setAnalyses] = useState<AnalysisRow[]>([]);
   const [analysesLoading, setAnalysesLoading] = useState(true);
 
   const displayName = user?.firstName || user?.username || "User";
+
+  const goToAnalysis = (symbol?: string) => {
+    const trimmed = (symbol ?? assetSearch).trim();
+    if (!trimmed) return;
+    router.push(`/Analysis?symbol=${encodeURIComponent(trimmed)}`);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -363,24 +374,29 @@ export default function SentilyzeDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="relative hidden md:block">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search assets..."
-                  className="bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-cyan-500/50 w-64"
+            <div className="flex items-center gap-3 flex-1 justify-end min-w-0">
+              <div className="relative w-full max-w-xs sm:max-w-sm md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
+                <SymbolAutocomplete
+                  value={assetSearch}
+                  onChange={setAssetSearch}
+                  onSubmit={goToAnalysis}
+                  submitOnPick
+                  placeholder="Search symbol or topic (e.g. AAPL, bitcoin)"
+                  className="relative w-full"
+                  inputClassName="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
                 />
               </div>
 
-              <button className="relative p-2 hover:bg-white/5 rounded-lg transition-colors">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
+              <NotificationBell />
 
-              <button className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+              <Link
+                href="/settings"
+                className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                aria-label="Settings"
+              >
                 <Settings className="w-5 h-5" />
-              </button>
+              </Link>
 
               <UserButton 
                 appearance={{

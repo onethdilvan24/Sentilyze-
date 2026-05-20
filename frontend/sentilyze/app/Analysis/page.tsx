@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   RefreshCw,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import SymbolAutocomplete from "@/components/analysis/SymbolAutocomplete";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Signal = "BUY" | "SELL" | "HOLD";
 type Impact = "Positive" | "Negative" | "Neutral";
@@ -62,6 +63,10 @@ interface RecentAnalysisRow {
 }
 
 export default function AnalysisPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoRunDone = useRef(false);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<Impact | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -121,47 +126,62 @@ export default function AnalysisPage() {
     setSearchQuery("");
   };
 
-  const handleAnalyze = async () => {
-    const symbol = marketInput.trim();
-    if (!symbol) {
-      setError("Enter a market symbol or keyword.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setAnalysisResult(null);
-        setError(
-          typeof data.error === "string"
-            ? data.error
-            : `Analysis failed (${res.status}).`,
-        );
+  const handleAnalyze = useCallback(
+    async (symbolOverride?: string) => {
+      const symbol = (symbolOverride ?? marketInput).trim();
+      if (!symbol) {
+        setError("Enter a market symbol or keyword.");
         return;
       }
 
-      setAnalysisResult(data as AnalysisApiResponse);
-      loadRecentAnalyses();
-    } catch (e) {
-      setAnalysisResult(null);
-      setError(
-        e instanceof Error ? e.message : "Network error. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch("/api/analyze", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          setAnalysisResult(null);
+          setError(
+            typeof data.error === "string"
+              ? data.error
+              : `Analysis failed (${res.status}).`,
+          );
+          return;
+        }
+
+        setAnalysisResult(data as AnalysisApiResponse);
+        setMarketInput(symbol);
+        loadRecentAnalyses();
+      } catch (e) {
+        setAnalysisResult(null);
+        setError(
+          e instanceof Error ? e.message : "Network error. Please try again.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [marketInput, loadRecentAnalyses],
+  );
+
+  useEffect(() => {
+    const symbolParam = searchParams.get("symbol")?.trim();
+    if (!symbolParam || autoRunDone.current) return;
+
+    autoRunDone.current = true;
+    const decoded = decodeURIComponent(symbolParam);
+    setMarketInput(decoded);
+    router.replace("/Analysis", { scroll: false });
+    void handleAnalyze(decoded);
+  }, [searchParams, router, handleAnalyze]);
 
   const filteredNews = useMemo(() => {
     if (!analysisResult?.newsItems) return [];
@@ -259,7 +279,7 @@ export default function AnalysisPage() {
               </button>
               <button
                 type="button"
-                onClick={handleAnalyze}
+                onClick={() => handleAnalyze()}
                 disabled={loading || !marketInput.trim()}
                 className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg flex gap-2 disabled:opacity-50"
               >
@@ -346,7 +366,7 @@ export default function AnalysisPage() {
               />
               <button
                 type="button"
-                onClick={handleAnalyze}
+                onClick={() => handleAnalyze()}
                 disabled={loading || !marketInput.trim()}
                 className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg font-semibold hover:shadow-lg hover:shadow-cyan-500/30 transition-all whitespace-nowrap disabled:opacity-50 flex items-center justify-center gap-2"
               >

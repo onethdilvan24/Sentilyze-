@@ -6,9 +6,12 @@ import { searchSymbols, type MarketSymbol, type MarketType } from "@/lib/marketS
 interface Props {
   value: string;
   onChange: (v: string) => void;
-  onSubmit: () => void;
+  onSubmit: (pickedSymbol?: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  inputClassName?: string;
+  className?: string;
+  submitOnPick?: boolean;
 }
 
 const TYPE_STYLES: Record<MarketType, string> = {
@@ -17,12 +20,18 @@ const TYPE_STYLES: Record<MarketType, string> = {
   Forex: "text-purple-400 bg-purple-500/10 border-purple-500/30",
 };
 
+const DEFAULT_INPUT_CLASS =
+  "w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all disabled:opacity-50";
+
 export default function SymbolAutocomplete({
   value,
   onChange,
   onSubmit,
   disabled = false,
   placeholder = "Search symbol or name (e.g., apple, bitcoin, EUR/USD)",
+  inputClassName,
+  className = "relative flex-1",
+  submitOnPick = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -62,15 +71,18 @@ export default function SymbolAutocomplete({
       setOpen(false);
       setActiveIndex(-1);
       inputRef.current?.focus();
+      if (submitOnPick) {
+        onSubmit(item.symbol);
+      }
     },
-    [onChange]
+    [onChange, onSubmit, submitOnPick]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!open || suggestions.length === 0) {
       if (e.key === "Enter") {
         e.preventDefault();
-        onSubmit();
+        onSubmit(value.trim() || undefined);
       }
       return;
     }
@@ -89,9 +101,8 @@ export default function SymbolAutocomplete({
         if (activeIndex >= 0 && suggestions[activeIndex]) {
           pickSuggestion(suggestions[activeIndex]);
         } else {
-          // No suggestion highlighted - close dropdown and submit
           setOpen(false);
-          onSubmit();
+          onSubmit(value.trim() || undefined);
         }
         break;
       case "Escape":
@@ -125,7 +136,7 @@ export default function SymbolAutocomplete({
   };
 
   return (
-    <div ref={containerRef} className="relative flex-1">
+    <div ref={containerRef} className={className}>
       <input
         ref={inputRef}
         type="text"
@@ -143,7 +154,7 @@ export default function SymbolAutocomplete({
         disabled={disabled}
         placeholder={placeholder}
         autoComplete="off"
-        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all disabled:opacity-50"
+        className={inputClassName ?? DEFAULT_INPUT_CLASS}
       />
 
       {shouldShowDropdown && (
